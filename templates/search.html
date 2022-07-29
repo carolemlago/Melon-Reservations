@@ -1,0 +1,52 @@
+
+{% extends 'base.html' %}
+{% block head %}
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.0/main.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.0/main.min.css"/>
+    <link rel="stylesheet" type="text/css" href="/static/css/styles.css" />
+{% endblock %}
+
+{% block title %} User's Dashboard{% endblock %}
+
+    
+{% block body %}
+<div class="no-background">
+<center>
+    <!-- Calendar Div -->
+    <div id='calendar'></div>
+</center>
+
+<center>
+    <div>
+    <form action="/results">    
+        <!-- Date -->
+    <div class="col-6">
+        <div>
+            <label>Date
+                <input type="date" id="date" name="date" class="form-select" required pattern="\d{4}-\d{2}-\d{2}">
+                <span class="validity"></span>
+                </label>
+        </div> 
+        <br>
+
+        <div>
+            <label for="start_time">Start time:</label>
+            <select type="time" id="start_time" name="start_time">
+            </select>
+        </div>
+            <br>   
+        <div>
+            <label for="end_time">End time:</label>
+            <select type="time" id="end_time" name="end_time">
+            </select>
+        </div>
+        <br>
+        <div class="form-floating center-button" id="search-button">
+            <button id="floatingSelectGrid" type="submit">Search</button>
+        </div>
+    </form>
+    </div>
+</center>
+    <div id='calendar'></div>
+    
+{% endblock %}
