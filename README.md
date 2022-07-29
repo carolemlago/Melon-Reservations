@@ -5,7 +5,6 @@ Melon Reservation Scheduler: this is simple reservation scheduler project made f
 * 🤖 [Technologies](#technologies-used)
 * ⭐ [Features](#features)
 * 🚀 [Future Improvements](#future-improvements)
-* 😸 [About Me](#about-me)
 
 ## Technologies Used
 * Backend: Python, Flask, SQL, PostgreSQL, SQLAlchemy
