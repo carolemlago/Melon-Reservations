@@ -1,61 +1,49 @@
-"""Server for movie ratings app."""
-
+"""Server for melon schedule app."""
 from flask import Flask, render_template, request, flash, session, redirect, jsonify
-from model import connect_to_db, db
-import crud
-from jinja2 import StrictUndefined
-from urllib.parse import _ResultMixinStr
-from passlib.hash import argon2
-from pprint import pformat
+from datetime import datetime, timedelta
+from dateutil.parser import parse
+from model import Reservation, db, connect_to_db
 import os
-import requests
-import time
-import datetime
 
 app = Flask(__name__)
-app.secret_key = "dev"
-app.jinja_env.undefined = StrictUndefined
+app.secret_key = os.environ["APP_SECRET_KEY"]
+connect_to_db(app)
 
 
 
-@app.route('/')
-def log_in():
 
-    """ Show log in page """
-    return render_template("login.html")
+@app.route("/")
+def homepage():
+    """View homepage."""
 
-@app.route('/create_user', methods=["POST"])
-def create_user():
-    """ Create new user """
+    return render_template("index.html")
 
-    email = request.form.get("email")
-    user_password = request.form.get("password")
-    confirm_password = request.form.get("confirm_password")
-    
-    # Hashing password
-    hashed = argon2.hash(user_password)
-    
-    del user_password
+@app.route("/logout")
+def logout():
+    """Logout and redirect homepage."""
 
-    user = crud.get_user_by_email(email)
+    session.clear()
 
-    # Check if user already have an account
-    if user:
-        flash("User email already exists.")
-        return redirect("/login")
+    return redirect("/")
 
-    elif not argon2.verify(confirm_password, hashed):
-        flash("Passwords don't match. Try again.")
 
-    # Create new user in the database with user's info from the html form
+@app.route("/reservations", methods=["POST", "GET"])
+def get_user_reservations():
+    """ Retrieve reservations the user has made."""
+    if request.method == "POST":
+        username = request.form.get("username")
+        session["username"] = username
     else:
-        user = crud.create_user(email, hashed)
-        db.session.add(user)    
-        db.session.commit()
-        user_id = user.user_id
-        flash('Account created!')
-        session['user_id'] = user.user_id
-        return redirect(f"/search_page")
+        # assign a value to username is user is in session
+        if 'username' in session:
+            username = session["username"]
+        # if the user is not in session, redirect them to the homepage
+        else:
+            return redirect("/")
+    existing_reservations = Reservation.retrieve_reservations(username)
+
+    return render_template("reservations.html", reservations=existing_reservations)
+
 
 @app.route('/search_page')
 def show_user():
@@ -78,32 +66,10 @@ def show_user():
 
     return render_template("search.html", user=user, date=date, start_time=start_time, end_time=end_time)
 
-@app.route('/results', methods=['POST'])
-def show_results():
-    """ Show results from search """
-
-    # Data from search
-    date = request.form.get("date")
-    start_time = request.form.get("start_time")
-    end_time = request.form.get("end_time")
-
-    # Getting data from user in session
-    user = crud.get_user_by_id(user_id=session['user_id'])
-
-    # Check if time slot is available:
-    time_availability = crud.get_reservations_by_start_time(date, start_time)
-    if time_availability == None:
-
-        # Create reservation
-        reservation = crud.Reservation(user_id=user.user_id, start_time=start_time, end_time=end_time)
-        db.session.add(reservation)
-        db.session.commit()
-
-    else:
-        flash("There's no availability for this date and time")
-        return redirect('/search_page')
-
-    return render_template('booking_options.html', start_time=start_time, end_time=end_time, date=date, reservation=reservation, user=user)
+@app.route("/schedule")
+def render_schedule():
+    """ View scheduling page."""
+    return render_template("schedule.html")
        
 @app.route('/reservations')
 def all_reservations(user_id):
@@ -117,17 +83,37 @@ def all_reservations(user_id):
 
     return render_template('reservations.html', reservations=reservations, user=user) 
 
+@app.route("/reservations/delete", methods=["POST"])
+def delete_reservation():
+    """ Delete reservations the user has made."""
+    reservation_start = parse(request.json.get("startTime"))
+    username = session["username"]
 
-@app.route('/delete_appointment', methods=['POST'])
-def delete_time():
-    """ Delete appointment from database """
+    reservation_to_delete = Reservation.find_reservation_by_start_and_user(
+        reservation_start, username
+    )
+    db.session.delete(reservation_to_delete)
+    db.session.commit()
+    return "Success"
 
-    reservation_id = request.json.get("reservationId")
-    
-    crud.delete_reservation(reservation_id=reservation_id) 
-    return ("Success!")
+@app.route("/reservations/book", methods=["POST"])
+def make_reservation():
+    """ Create a reservation with the specified user and time."""
+    reservation_start = parse(request.form.get("start_time"))
+    username = session["username"]
+
+    new_reservation = Reservation.create_reservation(username, reservation_start)
+    db.session.add(new_reservation)
+    db.session.commit()
+    return redirect("/reservations")
+
+@app.route("/search_reservations", methods=["GET"])
+def search_reservation():
+    start_time = parse(request.args.get("startTime"))
+    end_time = parse(request.args.get("endTime"))
+
+    available_times = Reservation.available_reservations(start_time, end_time, session["username"])
+    return jsonify(available_times)
 
 if __name__ == "__main__":
-    # DebugToolbarExtension(app)
-    connect_to_db(app)
     app.run(host="0.0.0.0", debug=True)

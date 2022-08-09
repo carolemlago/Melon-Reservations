@@ -1,35 +1,20 @@
 """Script to seed database."""
-
 import os
-import json
-from random import choice, randint
-from datetime import datetime
-
-import crud
 import model
 import server
+import datetime
 
-os.system("dropdb reservations")
-os.system('createdb reservations')
+os.system("dropdb melon_reservations")
+os.system("createdb melon_reservations")
+
 model.connect_to_db(server.app)
 model.db.create_all()
 
-
-
-
-for n in range(10):
-    email = f'user{n}@test.com'  
-    password = 'test'
-
-    user = crud.create_user(email, password)
-    model.db.session.add(user)
-
-for _ in range(10):
-    user_id = user_id
-    start_time = start_time
-    end_time = end_time
-
-    reservation = crud.create_reservation(user_id, start_time, end_time)
-    model.db.session.add(reservation)
-
-model.db.session.commit()
+# generate reservations for users 0 - 9 (user0, user1, user2 ... user9)
+# on dates corresponding to their user number (October 1 - 10) at 9am
+for i in range(10):
+    username = "user" + str(i)
+    reservation_start = datetime.datetime(2022, 5, i + 1, 9)
+    new_reservaton = model.Reservation(username=username, start_time=reservation_start)
+    model.db.session.add(new_reservaton)
+    model.db.session.commit()

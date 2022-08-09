@@ -1,65 +1,89 @@
-"""Models for Wego Itinerary Planner app."""
+""" Melon reservations app """
 
-from flask_sqlalchemy import SQLAlchemy
-from passlib.hash import argon2
 import datetime
+from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime, timedelta
 
 db = SQLAlchemy()
 
+class Reservation(db.Model):
+    __tablename__ = "reservations"
 
+    reservation_id = db.Column(db.Integer, autoincrement=True, primary_key=True)
+    username = db.Column(db.String)
+    start_time = db.Column(db.DateTime(timezone=True))
 
+    def __repr__(self):
+        return f"<User username={self.username} start_time={self.start_time}>"
 
-def connect_to_db(flask_app, db_uri="postgresql:///reservations", echo=False):
+    def to_dict(self):
+        return {
+            "reservation_id": self.reservation_id,
+            "username": self.username,
+            "start_time": self.start_time.isoformat(),
+        }
+
+    @classmethod
+    def find_reservation_by_start_and_user(cls, reservation_start, username):
+        reservation = cls.query\
+            .filter(cls.start_time==reservation_start)\
+            .filter(cls.username==username)\
+            .first()
+        return reservation
+
+    @classmethod
+    def retrieve_reservations(cls, username):
+        return cls.query.filter_by(username=username).all()
+
+    @classmethod
+    def create_reservation(cls, username, reservation_start): 
+        new_reservation = cls(username=username, start_time=reservation_start)
+        return new_reservation
+
+    @classmethod
+    def available_reservations(cls, start_time, end_time, username):
+        # Retrieve reservations within the specified time range 
+        all_reservations_in_range = (
+            db.session.query(cls.start_time)\
+            .filter(cls.start_time.between(start_time, end_time))\
+        )
+        # Get reservation times without time zone
+        existing_reservation_times = \
+            {res[0].replace(tzinfo=None) for res in all_reservations_in_range.all()}
+
+        # Get ALL current user reservations. The reason I am doing this is because during
+        # testing I noticed that the all_reservations_in_range did not include reservations
+        #  the user made that day at a later time outside the end time. To prevent users from 
+        # booking multiple reservations on the same day, I get all current user reservations 
+        # and check that any other available reservations are not on that day. 
+        user_reservations = db.session.query(cls.start_time)\
+            .filter(cls.username==username)\
+            .all()
+
+        # get the list of dates the user has a reservation on
+        user_reservation_dates = {res.start_time.date() for res in user_reservations}
+
+        # Initialize list for possible times 
+        times = []
+    
+        # Possible reservations can only happen on the half hour
+        first_reservation_time = start_time + (datetime.min - start_time) \
+            % timedelta(minutes=30)
+        current = first_reservation_time
+
+        # Add possible times, filtering where a reservation already exists OR where
+        # user already has a reservation on that date
+        while current < end_time:
+            if current not in existing_reservation_times and current.date() not in user_reservation_dates:
+                times.append(current)
+            current = current + timedelta(minutes=30)
+        return times
+
+def connect_to_db(flask_app, db_uri="postgresql:///melon_reservations"):
     flask_app.config["SQLALCHEMY_DATABASE_URI"] = db_uri
-    flask_app.config["SQLALCHEMY_ECHO"] = echo
     flask_app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
     db.app = flask_app
     db.init_app(flask_app)
 
     print("Connected to the db!")
-
-
-class User(db.Model):
-    """User's information"""
-
-    __tablename__ = "users"
-
-    user_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    email = db.Column(db.String(25), nullable=False, unique=True)
-    hashed = db.Column(db.String(100), nullable=False)  
-
-    reservations = db.relationship("Reservation", back_populates="user")
-
-    def __repr__(self):
-        return f"<User user_id = {self.user_id} email = {self.email}>"
-
-
-class Reservation(db.Model):
-    """Reservation table"""
-
-    __tablename__ = "reservations"
-
-    reservation_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.user_id"))
-    date = db.Column(db.DateTime)
-    start_time = db.Column(db.DateTime)
-    end_time = db.Column(db.DateTime)
-    
-
-    user = db.relationship("User", back_populates="reservations")
-
-   
-
-    def __repr__(self):
-        return f"<Reservation reservation_id = {self.reservation_id} date = {self.date} start_time = {self.start_time} end_time = {self.end_time} >"
-
-
-if __name__ == "__main__":
-    from server import app
-
-    # Call connect_to_db(app, echo=False) if your program output gets
-    # too annoying; this will tell SQLAlchemy not to print out every
-    # query it executes.
-
-    connect_to_db(app)
